@@ -11,7 +11,7 @@ speed-concurrent: 20
 # 是否打乱节点的测试顺序（仅影响测试先后，输出顺序保持订阅原序不变）
 # 开启后可避免同机场相邻节点、同节点的多个协议被扎堆在同一时间窗口测试，
 # 从而降低相邻IP一起出问题、互相干扰的概率
-shuffle-test-order: false
+shuffle-test-order: true
 # 检查间隔(分钟)
 # 必须大于0，小于等于0会设置间隔1分钟
 check-interval: 120
