@@ -133,12 +133,13 @@ func (app *App) newRouter() (*gin.Engine, error) {
 		router.GET("/admin", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "admin.html", gin.H{
 				"configPath": app.configPath,
+				"nav":        "admin",
 			})
 		})
 
 		// Results page
 		router.GET("/admin/results", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "results.html", nil)
+			c.HTML(http.StatusOK, "results.html", gin.H{"nav": "results"})
 		})
 	} else {
 		slog.Info("Web控制面板已禁用")
