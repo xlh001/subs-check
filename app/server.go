@@ -318,14 +318,14 @@ func (app *App) getStatus(c *gin.Context) {
 		"speedPass":  check.SpeedOk.Load(),
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"checking":      app.checking.Load(),
-		"proxyCount":    check.ProxyCount.Load(),
-		"available":     check.Available.Load(),
-		"progress":      check.Progress.Load(),
-		"phase":         check.Phase.Load(),
-		"phaseResults":  phaseResults,
-		"pipeline":      pipeline,
-		"hasSpeedTest":  config.GlobalConfig.SpeedTestUrl != "",
+		"checking":     app.checking.Load(),
+		"proxyCount":   check.ProxyCount.Load(),
+		"available":    check.Available.Load(),
+		"progress":     check.Progress.Load(),
+		"phase":        check.Phase.Load(),
+		"phaseResults": phaseResults,
+		"pipeline":     pipeline,
+		"hasSpeedTest": config.GlobalConfig.SpeedTestUrl != "",
 	})
 }
 
