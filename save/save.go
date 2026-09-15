@@ -8,6 +8,7 @@ import (
 
 	"github.com/beck-8/subs-check/check"
 	"github.com/beck-8/subs-check/config"
+	"github.com/beck-8/subs-check/export"
 	"github.com/beck-8/subs-check/save/method"
 	"github.com/beck-8/subs-check/utils"
 	"gopkg.in/yaml.v3"
@@ -33,6 +34,7 @@ func SaveConfig(results []check.Result) {
 	// 此时所有下游序列化都会失败,统一在入口短路并以 Warn 记录,避免多余的 Error 日志
 	if len(results) == 0 {
 		slog.Warn("本轮没有可保存的节点，跳过保存")
+		saveResultsSnapshot(nil)
 		return
 	}
 
@@ -47,12 +49,17 @@ func SaveConfig(results []check.Result) {
 	}
 
 	// ② 原地 mutate:把每个 proxy 的 name 改成最终展示名
+	// Also collect structured records for the results page.
+	nodes := make([]NodeRecord, 0, len(results))
 	for i := range results {
 		if results[i].Proxy == nil {
 			continue
 		}
-		results[i].Proxy["name"] = check.RenderName(results[i], true)
+		parts := check.RenderNameParts(results[i], true)
+		results[i].Proxy["name"] = parts.String()
+		nodes = append(nodes, newNodeRecord(results[i], parts))
 	}
+	saveResultsSnapshot(nodes)
 
 	// ③ 用 mutate 过的 results 序列化,给 all.yaml / 远程 / SubStore 复用
 	allYamlData, err := marshalProxies(results)
@@ -69,7 +76,10 @@ func SaveConfig(results []check.Result) {
 	// 更新 SubStore 并获取衍生文件(mihomo.yaml / base64.txt)
 	var mihomoData, base64Data []byte
 	if config.GlobalConfig.SubStorePort != "" {
-		utils.UpdateSubStore(allYamlData)
+		// Rebuild exports only once sub-store holds this round's nodes.
+		if err := utils.UpdateSubStore(allYamlData); err == nil {
+			export.RoundComplete()
+		}
 		mihomoData = fetchSubStoreData(
 			fmt.Sprintf("%s/api/file/%s", utils.BaseURL, utils.MihomoName),
 			"mihomo.yaml",

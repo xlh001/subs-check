@@ -316,6 +316,44 @@
             margin-top: 2px;
         }
 
+        /* When idle, the last finished stage card links to the results page */
+        .phase-step { position: relative; }
+        .phase-step .phase-link-hint,
+        .phase-step .phase-link-chev { display: none; }
+        .phase-step.phase-link { cursor: pointer; }
+        .phase-step.phase-link .phase-link-chev {
+            display: block;
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.7rem;
+            opacity: 0.55;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .phase-step.phase-link:hover,
+        .phase-step.phase-link:focus-visible {
+            background-color: #bbf7d0;
+            border-color: #6ee7b7;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(46, 196, 182, 0.25);
+            outline: none;
+        }
+        .phase-step.phase-link:hover .phase-link-chev,
+        .phase-step.phase-link:focus-visible .phase-link-chev {
+            opacity: 1;
+            transform: translate(2px, -50%);
+        }
+        .phase-step.phase-link:hover .phase-count,
+        .phase-step.phase-link:focus-visible .phase-count { display: none; }
+        .phase-step.phase-link:hover .phase-link-hint,
+        .phase-step.phase-link:focus-visible .phase-link-hint {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
         /* 进度条样式 */
         .progress-section {
             padding: 14px;
@@ -487,14 +525,20 @@
                             <div id="phaseStep1" class="phase-step" data-phase="1">
                                 <span class="phase-icon"><i class="bi bi-heart-pulse"></i></span>测活
                                 <span class="phase-count" id="phaseCount1"></span>
+                                <span class="phase-link-hint">查看结果</span>
+                                <i class="bi bi-chevron-right phase-link-chev"></i>
                             </div>
                             <div id="phaseStep2" class="phase-step" data-phase="2">
                                 <span class="phase-icon"><i class="bi bi-film"></i></span>流媒体+重命名
                                 <span class="phase-count" id="phaseCount2"></span>
+                                <span class="phase-link-hint">查看结果</span>
+                                <i class="bi bi-chevron-right phase-link-chev"></i>
                             </div>
                             <div id="phaseStep3" class="phase-step" data-phase="3">
                                 <span class="phase-icon"><i class="bi bi-speedometer"></i></span>测速
                                 <span class="phase-count" id="phaseCount3"></span>
+                                <span class="phase-link-hint">查看结果</span>
+                                <i class="bi bi-chevron-right phase-link-chev"></i>
                             </div>
                         </div>
                         <div class="progress-info">
@@ -921,6 +965,40 @@
             }
         }
 
+        // When idle, the last finished stage card (usually speed test) opens the results page.
+        function updateResultsLink(idle) {
+            let target = 0;
+            if (idle) {
+                for (let i = 3; i >= 1; i--) {
+                    if (phaseStepEls[i].classList.contains('done')) { target = i; break; }
+                }
+            }
+            for (let i = 1; i <= 3; i++) {
+                const step = phaseStepEls[i];
+                const on = i === target;
+                step.classList.toggle('phase-link', on);
+                if (on) {
+                    step.setAttribute('role', 'link');
+                    step.setAttribute('tabindex', '0');
+                    step.setAttribute('title', '查看检测结果');
+                } else {
+                    step.removeAttribute('role');
+                    step.removeAttribute('tabindex');
+                    step.removeAttribute('title');
+                }
+            }
+        }
+
+        dom.phaseSteps.addEventListener('click', function(e) {
+            if (e.target.closest('.phase-link')) window.location.href = '/admin/results';
+        });
+        dom.phaseSteps.addEventListener('keydown', function(e) {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.phase-link')) {
+                e.preventDefault();
+                window.location.href = '/admin/results';
+            }
+        });
+
         // 更新进度条
         function updateProgressBar(total, processed, available, phase, phaseResults) {
             const percentTotal = total > 0 ? (processed / total * 100).toFixed(1) : 0;
@@ -1032,6 +1110,7 @@
                             // legacy fallback (older server)
                             updateProgressBar(data.proxyCount, data.progress, data.available, data.phase, data.phaseResults);
                         }
+                        updateResultsLink(false);
                     } else {
                         dom.statusContainer.className = 'text-success';
                         dom.statusIcon.className = 'bi bi-check-circle me-1';
@@ -1039,6 +1118,7 @@
 
                         updatePhaseSteps(0, 0, 0, data.phaseResults);
                         resetProgress();
+                        updateResultsLink(true);
                     }
                 }
             })
