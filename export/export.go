@@ -205,7 +205,7 @@ var (
 // Default returns the process-wide cache, kept in this instance's cache dir.
 func Default() *Cache {
 	defaultOnce.Do(func() {
-		dir := filepath.Join(utils.CacheDir(localOutputDir()), "export")
+		dir := filepath.Join(utils.CacheDir(), "export")
 		defaultCache = New(dir, fetchFromSubStore, localOutputDir)
 	})
 	return defaultCache
@@ -319,16 +319,23 @@ func (c *Cache) run(t Target) error {
 		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 		defer cancel()
 		data, err := c.fetch(ctx, t.platform)
+		var tmp string
 		if err == nil {
-			err = c.store(t.ID, gen, data)
+			tmp, err = c.writeTemp(t.ID, data)
 		}
 
+		// Check enablement and publish under the lock Disable holds, so a
+		// disabled target's file never becomes reachable, even briefly.
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if !c.enabled[t.ID] {
-			// Disabled mid-conversion: drop anything just written.
-			c.removeFiles(t.ID)
+			if tmp != "" {
+				os.Remove(tmp)
+			}
 			return nil, nil
+		}
+		if err == nil {
+			err = c.publish(t.ID, gen, tmp)
 		}
 		if err != nil {
 			// Don't let an older round's failure mask a newer file.
@@ -367,14 +374,38 @@ func (e entry) before(o entry) bool {
 	return e.nano < o.nano
 }
 
-func (c *Cache) store(id string, gen uint64, data []byte) error {
+// writeTemp writes data to a private temp file in the cache dir; publish makes it visible.
+func (c *Cache) writeTemp(id string, data []byte) (string, error) {
+	if err := os.MkdirAll(c.dir, 0o700); err != nil {
+		return "", fmt.Errorf("写入缓存文件失败: %w", err)
+	}
+	f, err := os.CreateTemp(c.dir, ".tmp-"+id+"-*")
+	if err != nil {
+		return "", fmt.Errorf("写入缓存文件失败: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", fmt.Errorf("写入缓存文件失败: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return "", fmt.Errorf("写入缓存文件失败: %w", err)
+	}
+	return f.Name(), nil
+}
+
+// publish renames tmp to <id>.g<round>.<unixnano> and removes older files.
+// Callers hold c.mu so it can't interleave with Disable.
+func (c *Cache) publish(id string, gen uint64, tmp string) error {
 	cur := entry{gen: gen, nano: c.now().UnixNano()}
 	cur.path = filepath.Join(c.dir, fmt.Sprintf("%s.g%d.%d", id, cur.gen, cur.nano))
-	if err := utils.WriteFileAtomic(cur.path, data); err != nil {
+	if err := os.Rename(tmp, cur.path); err != nil {
+		os.Remove(tmp)
 		return fmt.Errorf("写入缓存文件失败: %w", err)
 	}
 	// Remove only older files; a newer round may have finished first.
-	// On Windows a file being served can't be removed; the next store retries.
+	// On Windows a file being served can't be removed; the next publish retries.
 	for _, e := range c.entries(id) {
 		if e.before(cur) {
 			os.Remove(e.path)

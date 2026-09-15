@@ -1,26 +1,33 @@
 package utils
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// CacheDir returns the private cache dir (results snapshot, export cache) of the
-// instance writing to outputDir. Exports contain credentials, so it lives in the
-// per-user cache dir rather than the shared /tmp or the public output dir, keyed
-// by the output path so separate instances never share it.
-func CacheDir(outputDir string) string {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		base = os.TempDir()
+// cacheDir is set once at startup; see SetCacheDir.
+var cacheDir string
+
+// SetCacheDir derives the private cache dir (results snapshot, export cache) from
+// the config file: <config dir>/cache/<config name>. Deployments already persist
+// the config dir (e.g. the Docker volume) and /sub/ never serves it; the config
+// name keeps instances that share a config dir apart.
+func SetCacheDir(configPath string) {
+	if abs, err := filepath.Abs(configPath); err == nil {
+		configPath = abs
 	}
-	if abs, err := filepath.Abs(outputDir); err == nil {
-		outputDir = abs
+	name := strings.TrimSuffix(filepath.Base(configPath), filepath.Ext(configPath))
+	cacheDir = filepath.Join(filepath.Dir(configPath), "cache", name)
+}
+
+// CacheDir returns the dir chosen by SetCacheDir, or the one for the default
+// config path if it was never called.
+func CacheDir() string {
+	if cacheDir == "" {
+		return filepath.Join(GetExecutablePath(), "config", "cache", "config")
 	}
-	sum := sha256.Sum256([]byte(outputDir))
-	return filepath.Join(base, "subs-check", hex.EncodeToString(sum[:6]))
+	return cacheDir
 }
 
 // WriteFileAtomic writes via a temp file and rename so readers never see partial

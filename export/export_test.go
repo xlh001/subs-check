@@ -373,25 +373,56 @@ func TestDisable_DuringConversionDropsResult(t *testing.T) {
 	}
 }
 
-func TestStore_OlderRoundNeverOverridesNewer(t *testing.T) {
+// store writes and publishes content for id at the given round.
+func store(t *testing.T, c *Cache, id string, gen uint64, content string) {
+	t.Helper()
+	tmp, err := c.writeTemp(id, []byte(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.publish(id, gen, tmp); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteTemp_NotServedUntilPublished(t *testing.T) {
+	c, _, _ := newTestCache(t, newFakeSubStore("x"))
+
+	tmp, err := c.writeTemp("surge", []byte("pending"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Open("surge"); !errors.Is(err, ErrNotGenerated) {
+		t.Fatalf("Open before publish: got %v, want ErrNotGenerated", err)
+	}
+	if st := c.status(mustLookup(t, "surge")); st.State != StateNone {
+		t.Fatalf("state before publish = %q, want none", st.State)
+	}
+
+	if err := c.publish("surge", 0, tmp); err != nil {
+		t.Fatal(err)
+	}
+	if got := readServed(t, c, "surge"); got != "pending" {
+		t.Fatalf("served %q after publish", got)
+	}
+	if _, err := os.Stat(tmp); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("temp file still present after publish: %v", err)
+	}
+}
+
+func TestPublish_OlderRoundNeverOverridesNewer(t *testing.T) {
 	c, clock, _ := newTestCache(t, newFakeSubStore("x"))
 
-	if err := c.store("surge", 2, []byte("new")); err != nil {
-		t.Fatal(err)
-	}
+	store(t, c, "surge", 2, "new")
 	// A conversion from the previous round finishes later.
 	clock.advance(time.Second)
-	if err := c.store("surge", 1, []byte("old")); err != nil {
-		t.Fatal(err)
-	}
+	store(t, c, "surge", 1, "old")
 	if got := readServed(t, c, "surge"); got != "new" {
 		t.Fatalf("served %q, want new", got)
 	}
 
 	clock.advance(time.Second)
-	if err := c.store("surge", 3, []byte("newest")); err != nil {
-		t.Fatal(err)
-	}
+	store(t, c, "surge", 3, "newest")
 	if got := len(c.entries("surge")); got != 1 {
 		t.Fatalf("%d files left, want only the newest", got)
 	}

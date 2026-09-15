@@ -7,18 +7,20 @@ import (
 	"testing"
 )
 
-func TestCacheDir_SeparatesOutputDirs(t *testing.T) {
-	a := CacheDir(filepath.Join(t.TempDir(), "a", "output"))
-	b := CacheDir(filepath.Join(t.TempDir(), "b", "output"))
-	if a == b {
-		t.Fatalf("different output dirs share cache dir %s", a)
+func TestSetCacheDir_FollowsConfigFile(t *testing.T) {
+	old := cacheDir
+	t.Cleanup(func() { cacheDir = old })
+
+	dir := t.TempDir()
+	SetCacheDir(filepath.Join(dir, "config.yaml"))
+	if got, want := CacheDir(), filepath.Join(dir, "cache", "config"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
 	}
-	out := filepath.Join(t.TempDir(), "output")
-	if CacheDir(out) != CacheDir(out+string(filepath.Separator)) {
-		t.Error("same output dir mapped to different cache dirs")
-	}
-	if filepath.Base(filepath.Dir(a)) != "subs-check" {
-		t.Errorf("unexpected cache dir layout: %s", a)
+
+	// Config files sharing a dir get separate caches.
+	SetCacheDir(filepath.Join(dir, "other.yml"))
+	if got, want := CacheDir(), filepath.Join(dir, "cache", "other"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
 	}
 }
 

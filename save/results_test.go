@@ -112,6 +112,17 @@ func TestNewNodeRecord_ProtocolDefaults(t *testing.T) {
 			details: map[string]string{"ws-path": "/ray", "ws-host": "cdn.example.com", "skip-cert-verify": "false"},
 		},
 		{
+			name:    "wireguard without udp flag",
+			proxy:   map[string]any{"type": "wireguard", "server": "203.0.113.20", "port": 51820, "private-key": "secret"},
+			network: "udp",
+		},
+		{
+			name:    "wireguard with udp flag",
+			proxy:   map[string]any{"type": "wireguard", "server": "203.0.113.21", "port": 51820, "private-key": "secret", "udp": true},
+			udp:     true,
+			network: "udp",
+		},
+		{
 			name:    "servername is ignored without tls",
 			proxy:   map[string]any{"type": "vless", "server": "203.0.113.9", "port": 2087, "uuid": "secret", "tls": false, "udp": true, "servername": "/?--junk--", "network": "ws"},
 			udp:     true,

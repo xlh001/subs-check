@@ -10,7 +10,6 @@ import (
 
 	"github.com/beck-8/subs-check/check"
 	"github.com/beck-8/subs-check/config"
-	"github.com/beck-8/subs-check/save/method"
 	"github.com/beck-8/subs-check/utils"
 )
 
@@ -18,11 +17,7 @@ import (
 // instance's cache dir, not the output dir that /sub/ serves publicly.
 // Tests may replace it.
 var ResultsPath = func() string {
-	outputDir := ""
-	if saver, err := method.NewLocalSaver(); err == nil {
-		outputDir = saver.OutputPath
-	}
-	return filepath.Join(utils.CacheDir(outputDir), "results.json")
+	return filepath.Join(utils.CacheDir(), "results.json")
 }
 
 // ResultsSnapshot is the content of results.json.
@@ -123,8 +118,9 @@ func newNodeRecord(r check.Result, parts check.NameParts) NodeRecord {
 			rec.SNI = proxyString(p, "sni")
 		}
 	}
+	// Only these always relay UDP; WireGuard follows its udp flag like the rest.
 	switch typ {
-	case "hysteria", "hysteria2", "tuic", "wireguard":
+	case "hysteria", "hysteria2", "tuic":
 		rec.UDP = true
 	default:
 		rec.UDP = proxyBool(p, "udp")
